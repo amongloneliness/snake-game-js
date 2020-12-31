@@ -1,212 +1,403 @@
+'use strict'
+
 const canvas = document.getElementById("main-game");
 const ctx = canvas.getContext("2d");
 
-/* ====== sprites and audios ====== */
-const ground = new Image();
-const foodImg = new Image();
-const effect_1Img = new Image();
-const effect_2Img = new Image();
-const hrum_sound = new Audio();
-const score_sound = new Audio();
-const death_sound = new Audio();
-const win_sound = new Audio();
-const gulp_sound = new Audio();
+/* ====== sprites and sounds ====== */
+const pixelsOfBox = 32;
+const groundImage = new Image();
+const gameWinTitle = new Image();
+const gameLoseTitle = new Image();
+const foodImage = new Image();
+const poisonImage = new Image();
+const soundEatHrum = new Audio();
+const soundEatHrum2 = new Audio();
+const soundEatNyam = new Audio();
+const soundGulp = new Audio();
+const soundScore = new Audio();
+const soundOfDeath = new Audio();
+const soundOfWin = new Audio();
 
-ground.src = "snake-game-background.png";
-foodImg.src = "food-1.png";
-death_sound.src = "sound/death.mp3";
-score_sound.src = "sound/score.mp3";
-hrum_sound.src = "sound/hrum.mp3";
-win_sound.src = "sound/win.mp3";
-gulp_sound.src = "sound/gulp.mp3";
+/* ====== sources of game files ====== */
+groundImage.src = "snakeGameBackground.png";
+gameWinTitle.src = "gameWin.png";
+gameLoseTitle.src = "gameLose.png";
+foodImage.src = "food1.png";
+poisonImage.src = "poison1.png";
+soundOfDeath.src = "sound/death.mp3";
+soundScore.src = "sound/score.mp3";
+soundEatHrum2.src = "sound/hrum2.mp3";
+soundEatHrum.src = "sound/hrum.mp3";
+soundEatNyam.src = "sound/nyam.mp3";
+soundOfWin.src = "sound/win.mp3";
+soundGulp.src = "sound/gulp.mp3";
 
-// size-of-one-block
-let box = 32;
-// score-counter
-let score = 0;
-let score_add = 0;
-// speed of game
-let speed = 115;
-let speed_add = 0;
-
-// key-of-keyboard
-let key;
-
-function Food_generation() {
-  let number_food = Math.floor(Math.random() * 3 + 1);
-  foodImg.src = "food-" + number_food + ".png";
-  if (number_food == 1 || number_food == 2) {
-    score_add = 2;
+/* ====== game objects and primitives ====== */
+let gameScore = 0;
+let keyOfKeyboard;
+let indexAnimationFood = 0;
+let indexAnimationPoison = 0;
+let soundEatTemp = soundEatHrum;
+let level = function () {
+  if (gameScore >= 60) {
+    return 2;
   } else {
-    score_add = 1;
+    return 1;
   }
-  return {
-    x: Math.floor((Math.random() * 15 + 2)) * box,
-    y: Math.floor((Math.random() * 13 + 5)) * box
-  };
 }
 
-function Effect1_generation() {
-  let number_food = 4 + Math.floor(Math.random() * 2);
-  effect_1Img.src = "food-" + number_food + ".png";
-  if (number_food % 2 == 0) {
-    speed_add = 5;
-  } else {
-    speed_add = -5;
+let ground = {
+  groundSize: {
+    x1: 2,
+    x2: 15,
+    y1: 5,
+    y2: 13,
+  },
+
+  groundGeneratePositionOfItem: function () {
+    let position = {
+      x: Math.floor(Math.random() * this.groundSize.x2 + this.groundSize.x1) * pixelsOfBox,
+      y: Math.floor(Math.random() * this.groundSize.y2 + this.groundSize.y1) * pixelsOfBox
+    };
+
+    for (let i = 0; i < snake.form.length; i++) {
+      if (snake.form[i].x === position.x && snake.form[i].y === position.y) {
+        return this.groundGeneratePositionOfItem();
+        break;
+      }
+    }
+
+    return position;
   }
-  return {
-    x: Math.floor((Math.random() * 15 + 2)) * box,
-    y: Math.floor((Math.random() * 13 + 5)) * box
-  };
 }
 
-function Effect2_generation() {
-  effect_2Img.src = "food-6.png";
-  return {
-    x: Math.floor((Math.random() * 15 + 2)) * box,
-    y: Math.floor((Math.random() * 13 + 5)) * box
-  };
+let snake = {
+  speed: 75,
+  form: [{
+    x: 9 * pixelsOfBox,
+    y: 11 * pixelsOfBox,
+    color: "#70ffd480"
+  }],
+
+  snakeDrawing: function () {
+    for (let i = 0; i < this.form.length - 1; i++) {
+      ctx.fillStyle = this.form[i].color;
+      ctx.fillRect(this.form[i].x,
+        this.form[i].y,
+        pixelsOfBox,
+        pixelsOfBox);
+    }
+
+    ctx.fillStyle = "#70ffd4";
+    ctx.fillRect(this.form[this.form.length - 1].x,
+      this.form[this.form.length - 1].y,
+      pixelsOfBox,
+      pixelsOfBox);
+  },
+  
+  snakeIncreaseLength: function (snakeBlock) {
+    this.form.push(snakeBlock);
+    this.form.shift();
+  },
+
+  snakeControl: function (key) {
+    let snakeX = this.form[this.form.length - 1].x;
+    let snakeY = this.form[this.form.length - 1].y;
+
+    if (key == "left") {
+      snakeX -= pixelsOfBox;
+    } else if (key == "right") {
+      snakeX += pixelsOfBox;
+    } else if (key == "down") {
+      snakeY += pixelsOfBox;
+    } else if (key == "up") {
+      snakeY -= pixelsOfBox;
+    }
+
+    if (snakeX === 32) {
+      snakeX = 512;
+    } else if (snakeX  === 544) {
+      snakeX  = 64;
+    } else if (snakeY === 576) {
+      snakeY = 160;
+    } else if (snakeY === 128) {
+      snakeY = 544;
+    }
+
+    return {
+      x: snakeX, 
+      y: snakeY,
+      color: "#70ffd480"
+    };
+  },
+
+  snakeDead: function () {
+    for (let i = 0; i < snake.form.length - 1; i++) {
+      if (this.form[snake.form.length - 1].x == this.form[i].x &&
+          this.form[snake.form.length - 1].y == this.form[i].y) {
+        this.snakeDrawing();
+        soundOfDeath.play();
+        ctx.drawImage(gameLoseTitle, 0, 0);
+        clearInterval(game);
+        break;
+      }
+    }
+  },
+
+  snakeWin: function () {
+    if (gameScore >= 100) {
+      soundOfWin.play();
+      ctx.fillStyle = "gold";
+      ctx.font = "30px Vernada";
+      ctx.fillText(gameScore, pixelsOfBox * 3.5, pixelsOfBox * 2.2);
+      ctx.drawImage(gameWinTitle, 0, 0);
+      clearInterval(game);
+    }
+  }
 }
 
-let food = Food_generation();
-let effect_1 = Effect1_generation();
-let effect_2 = Effect2_generation();
+let food = {
+  foodPosition: ground.groundGeneratePositionOfItem(),
 
-let snake = [];
-snake[0] = {
-  x: 9 * box,
-  y: 11 * box
-};
+  foodType: {
+    One: {
+      imageSource: "food1.png",
+      audioSource: "sound/hrum.mp3"
+    },
+
+    Two: {
+      imageSource: "food2.png",
+      audioSource: "sound/nyam.mp3"
+    },
+
+    Three: {
+      imageSource: "food3.png",
+      audioSource: "sound/hrum.mp3"
+    },
+    
+    Four: {
+      imageSource: "food4.png",
+      audioSource: "sound/hrum2.mp3"
+    },
+
+    price: 1,
+
+    foodTypeGenerate: function() {
+      switch (Math.floor(Math.random() * 4 + 1)) {
+        case 1:
+          foodImage.src = this.One.imageSource;
+          soundEatTemp = soundEatHrum;
+          this.price = 2;
+          break;
+        case 2:
+          foodImage.src = this.Two.imageSource;
+          soundEatTemp = soundEatNyam;
+          this.price = 2;
+          break;
+        case 3:
+          foodImage.src = this.Three.imageSource;
+          soundEatTemp = soundEatHrum;
+          this.price = 1;
+          break;
+        case 4:
+          foodImage.src = this.Four.imageSource;
+          soundEatTemp = soundEatHrum2;
+          this.price = 2;
+        default:
+          break;
+      }
+    }
+  },
+
+  eatFood: function () {
+    if (snake.form[snake.form.length - 1].x === this.foodPosition.x &&
+      snake.form[snake.form.length - 1].y === this.foodPosition.y) {
+      soundEatTemp.play();
+      gameScore += +this.foodType.price;
+
+      snake.form.push({
+        x: this.foodPosition.x,
+        y: this.foodPosition.y,
+        color: "#70ffd480"
+      });
+
+      this.foodType.foodTypeGenerate();
+      this.foodPosition = ground.groundGeneratePositionOfItem();
+    }
+  }
+}
+
+let poison = {
+  poisonPosition: ground.groundGeneratePositionOfItem(),
+  poisonType: {
+    One: {
+      imageSource: "poison1.png"
+    },
+
+    Two: {
+      imageSource: "poison2.png"
+    },
+
+    Three: {
+      imageSource: "poison3.png"
+    },
+
+    poisonEffect: 1,
+
+    poisonTypeGenerate: function () {
+      switch (Math.floor(Math.random() * 3 + 1)) {
+        case 1:
+          poisonImage.src = this.One.imageSource;
+          this.poisonEffect = 1;
+          break;
+        case 2:
+          poisonImage.src = this.Two.imageSource;
+          this.poisonEffect = 2;
+          break;
+        case 3:
+          poisonImage.src = this.Three.imageSource;
+          this.poisonEffect = 3;
+          break;
+        default:
+          break;
+      }
+    }
+  },
+
+  poisonUseEffect: function () {
+    switch (this.poisonType.poisonEffect) {
+      case 1:
+        if (snake.speed > 30) {
+          snake.speed -= 5;
+          clearInterval(game);
+          game = setInterval(UpdateGame, snake.speed);
+        }
+        break;
+      case 2:
+        if (snake.speed < 90) {
+          snake.speed += 10;
+          clearInterval(game);
+          game = setInterval(UpdateGame, snake.speed);
+        }
+        break;
+      case 3:
+        gameScore -= 20;
+        snake.form.splice(0, 3);
+        break;
+      default:
+        break;
+    }
+  },
+
+  drinkPoison: function () {
+    if (snake.form[snake.form.length - 1].x === this.poisonPosition.x &&
+      snake.form[snake.form.length - 1].y === this.poisonPosition.y) {
+      soundGulp.play();
+      this.poisonUseEffect();
+
+      this.poisonType.poisonTypeGenerate();
+      this.poisonPosition = ground.groundGeneratePositionOfItem();
+    }
+  }
+}
+
+function UpdateGame() {
+  let lvl = level();
+  ctx.drawImage(groundImage, 0, 0);
+  DrawingElements();
+  
+  ctx.fillStyle = "white";
+  ctx.font = "30px Vernada";
+  ctx.fillText(gameScore, pixelsOfBox * 3.5, pixelsOfBox * 2.2);
+
+  snake.snakeDrawing();
+  snake.snakeIncreaseLength(snake.snakeControl(keyOfKeyboard));
+  snake.snakeDead();
+  snake.snakeWin();
+  UseElements(lvl);
+}
 
 document.addEventListener("keydown", direction);
 
+// controls
 function direction(event) {
-  setTimeout(function () {
-    if ((event.keyCode == 37 || event.keyCode == 65) && key != "right") {
-      key = "left";
-    }
-    else if ((event.keyCode == 38 || event.keyCode == 87) && key != "down") {
-      key = "up";
-    }
-    else if ((event.keyCode == 39 || event.keyCode == 68) && key != "left") {
-      key = "right";
-    }
-    else if ((event.keyCode == 40 || event.keyCode == 83) && key != "up") {
-      key = "down";
-    }
-    if (event.keyCode == 32) {
+  switch (event.keyCode) {
+    case 37:
+    case 65:
+      if (snake.form.length == 1 || (snake.form[snake.form.length - 1].x <= snake.form[snake.form.length - 2].x &&
+        (snake.form[snake.form.length - 1].x != 64 || snake.form[snake.form.length - 2].x != 512))) {
+        keyOfKeyboard = "left";
+      }
+      break;
+    case 38:
+    case 87:
+      if (snake.form.length == 1 || (snake.form[snake.form.length - 1].y <= snake.form[snake.form.length - 2].y &&
+        (snake.form[snake.form.length - 1].y != 160 || snake.form[snake.form.length - 2].y != 544))) {
+        keyOfKeyboard = "up";
+      }
+      break;
+    case 39:
+    case 68:
+      if (snake.form.length == 1 || (snake.form[snake.form.length - 1].x >= snake.form[snake.form.length - 2].x &&
+        (snake.form[snake.form.length - 1].x != 512 || snake.form[snake.form.length - 2].x != 64))) {
+        keyOfKeyboard = "right";
+      }
+      break;
+    case 40:
+    case 83:
+      if (snake.form.length == 1 || (snake.form[snake.form.length - 1].y >= snake.form[snake.form.length - 2].y &&
+        (snake.form[snake.form.length - 1].y != 544 || snake.form[snake.form.length - 2].y != 160))) {
+        keyOfKeyboard = "down";
+      }
+      break;
+    case 32:
       window.location.reload();
-    }
-  }, 1);
-}
-
-function eatTail(head, arr) {
-  for (let i = 0; i < arr.length; i++) {
-    if (head.x == arr[i].x && head.y == arr[i].y) {
-      Death();
-    }
+      break;
+    default:
+      break;
   }
 }
 
-function Death() {
-  death_sound.play();
-  clearInterval(game);
-  ctx.fillText("Game Over", box * 10, box * 2.2);
-  setTimeout("window.location.reload()", 1000);
+function DrawingElements() {
+  switch (level()) {
+    case 2:
+      PoisonAnimation();
+      ctx.drawImage(poisonImage, indexAnimationPoison, 0, 32, 32, poison.poisonPosition.x, poison.poisonPosition.y, 32, 32);
+    case 1:
+      FoodAnimation();
+      ctx.drawImage(foodImage, indexAnimationFood, 0, 32, 32, food.foodPosition.x, food.foodPosition.y, 32, 32);
+      break;
+    default:
+      break;
+  }
 }
-function Win() {
-  win_sound.play();
-  clearInterval(game);
-  ctx.fillStyle = "gold";
-  ctx.fillText("You Win!", box * 10, box * 2.2);
-}
 
-function Update() {
-  // ====== difficult of game
-  let level = { a: score > -1, b: score > 40, c: score > 80, win: score >= 100};
-  // ====== draw objects
-  if (level.a) {
-    ctx.drawImage(ground, 0, 0);
-    ctx.drawImage(foodImg, food.x, food.y);
-  }
-  if (level.b) {
-    ctx.drawImage(effect_1Img, effect_1.x, effect_1.y);
-  }
-  if (level.c) {
-    ctx.drawImage(effect_2Img, effect_2.x, effect_2.y);
-  }
-  if (level.win) {
-    Win();
-  }
-  // ====== draw player: <snake>
-  for (let i = 0; i < snake.length; i++) {
-    ctx.fillStyle = i == 0 ? "#70ffd4" : "#5abd9f" + (100 - i);
-    ctx.fillRect(snake[i].x, snake[i].y, box, box);
-  }
-
-  ctx.fillStyle = "white";
-  ctx.font = "30px Vernada";
-  ctx.fillText(score, box * 3.5, box * 2.2);
-
-  let snakeX = snake[0].x;
-  let snakeY = snake[0].y;
-
-  if (snakeX == food.x && snakeY == food.y) {
-    hrum_sound.pause();
-    hrum_sound.play();
-
-    score += score_add;
-
-    if (score % 10 == 0) {
-      score_sound.play();
-    }
-
-    if (score > 80) {
-      effect_1 = Effect1_generation();
-      effect_2 = Effect2_generation();
-    }
-
-    food = Food_generation();
-  } else if (level.b && snakeX == effect_1.x && snakeY == effect_1.y) {
-    effect_1 = Effect1_generation();
-    gulp_sound.play();
-    score--;
-    speed += speed_add;
-  } else if (level.c && snakeX == effect_2.x && snakeY == effect_2.y) {
-    effect_2 = Effect2_generation();
-    gulp_sound.play();
-    score -= 20;
+function PoisonAnimation() {
+  if (indexAnimationPoison < poisonImage.width - 32) {
+    indexAnimationPoison += 32;
   } else {
-    snake.pop();
+    indexAnimationPoison = 0;
   }
-
-  /* ====== death of player ====== */
-  if (snakeX < box * 2 || snakeX > box * 16 ||
-    snakeY < box * 5 || snakeY > box * 17) {
-    Death();
-  }
-
-  if (key == "left") {
-    snakeX -= box;
-  }
-  if (key == "right") {
-    snakeX += box;
-  } 
-  if (key == "up") {
-    snakeY -= box;
-  }
-  if (key == "down") {
-    snakeY += box;
-  }
-
-  let new_snake_head = {
-    x: snakeX,
-    y: snakeY
-  };
-
-  eatTail(new_snake_head, snake);
-
-  snake.unshift(new_snake_head);
 }
 
-let game = setInterval(Update, speed);
+function FoodAnimation() {
+  if (indexAnimationFood < foodImage.width - 32) {
+    indexAnimationFood += 32;
+  } else {
+    indexAnimationFood = 0;
+  }
+}
+
+function UseElements(lvl) {
+  switch (lvl) {
+    case 2:
+      poison.drinkPoison();
+    case 1:
+      food.eatFood();
+      break;
+    default:
+      break;
+  }
+}
+
+let game = setInterval(UpdateGame, snake.speed);
